@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nintendo GB Tracker</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap');
+
+  :root {
+    --gb:    #8bac0f;
+    --gbc:   #e63946;
+    --gba:   #457b9d;
+    --dark:  #0a0a0a;
+    --card:  #141414;
+    --border:#2a2a2a;
+    --text:  #e8e8e8;
+    --muted: #666;
+    --excl:  #f4a261;
+    --owned: #2a9d8f;
+    --loose: #e9c46a;
+    --complet:#2a9d8f;
+    --cib:   #e76f51;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--dark);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,.08) 2px, rgba(0,0,0,.08) 4px);
+    pointer-events: none;
+    z-index: 999;
+  }
+
+  header {
+    padding: 3rem 2rem 2rem;
+    text-align: center;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, #111 0%, var(--dark) 100%);
+  }
+  header h1 {
+    font-family: 'Press Start 2P', monospace;
+    font-size: clamp(0.75rem, 2.2vw, 1.3rem);
+    line-height: 1.8;
+    letter-spacing: 0.05em;
+    background: linear-gradient(90deg, var(--gb), var(--gbc), var(--gba));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 0.5rem;
+  }
+  header p { color: var(--muted); font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; }
+
+  /* ── CONTROLS ── */
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    padding: 1.2rem 2rem;
+    border-bottom: 1px solid var(--border);
+    align-items: center;
+    background: #0e0e0e;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .search-box {
+    flex: 1;
+    min-width: 180px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.75rem;
+    padding: 0.55rem 1rem;
+    outline: none;
+    transition: border-color .2s;
+  }
+  .search-box:focus { border-color: var(--gbc); }
+  .search-box::placeholder { color: var(--muted); }
+
+  .btn-group { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+
+  button {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 0.45rem;
+    padding: 0.5rem 0.8rem;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--muted);
+    cursor: pointer;
+    transition: all .2s;
+    letter-spacing: 0.05em;
+    line-height: 1.6;
+  }
+  button:hover { border-color: #555; color: var(--text); }
+  button.active-gb   { border-color: var(--gb);    color: var(--gb);    background: rgba(139,172,15,.08); }
+  button.active-gbc  { border-color: var(--gbc);   color: var(--gbc);   background: rgba(230,57,70,.08); }
+  button.active-gba  { border-color: var(--gba);   color: var(--gba);   background: rgba(69,123,157,.08); }
+  button.active-all  { border-color: #888;          color: var(--text);  background: rgba(255,255,255,.05); }
+  button.active-excl { border-color: var(--excl);  color: var(--excl);  background: rgba(244,162,97,.08); }
+  button.active-owned{ border-color: var(--owned); color: var(--owned); background: rgba(42,157,143,.08); }
+  button.active-miss { border-color: #888;          color: #aaa;         background: rgba(255,255,255,.03); }
+
+  /* ── STATS ── */
+  .stats {
+    display: flex;
+    gap: 1.5rem;
+    padding: 0.75rem 2rem;
+    font-size: 0.62rem;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    border-bottom: 1px solid var(--border);
+    background: var(--dark);
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .stats span b { color: var(--text); }
+
+  /* Progress bar */
+  .progress-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-left: auto;
+  }
+  .progress-bar {
+    width: 120px;
+    height: 8px;
+    background: var(--border);
+    border: 1px solid #333;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--gb), var(--owned));
+    transition: width .4s ease;
+  }
+  .progress-label { font-size: 0.6rem; color: var(--owned); white-space: nowrap; }
+
+  /* ── TABLE ── */
+  .table-wrap {
+    overflow-x: auto;
+    padding: 1.5rem 2rem 4rem;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.72rem;
+    min-width: 860px;
+  }
+
+  thead th {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 0.45rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    padding: 0.7rem 0.8rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+  thead th:hover { color: var(--text); }
+  thead th.sorted { color: var(--text); }
+  thead th .arrow { display: inline-block; margin-left: 4px; opacity: .4; }
+  thead th.sorted .arrow { opacity: 1; }
+  thead th.no-sort { cursor: default; }
+  thead th.no-sort:hover { color: var(--muted); }
+
+  tbody tr {
+    border-bottom: 1px solid #1a1a1a;
+    transition: background .12s;
+  }
+  tbody tr:hover { background: rgba(255,255,255,.025); }
+  tbody tr.row-owned { background: rgba(42,157,143,.04); }
+  tbody tr.row-owned:hover { background: rgba(42,157,143,.08); }
+
+  td { padding: 0.65rem 0.8rem; vertical-align: middle; line-height: 1.5; }
+
+  .badge {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 0.38rem;
+    padding: 0.28rem 0.5rem;
+    letter-spacing: 0.06em;
+    display: inline-block;
+    white-space: nowrap;
+  }
+  .badge-gb  { background: rgba(139,172,15,.15); color: var(--gb);  border: 1px solid rgba(139,172,15,.4); }
+  .badge-gbc { background: rgba(230,57,70,.15);  color: var(--gbc); border: 1px solid rgba(230,57,70,.4); }
+  .badge-gba { background: rgba(69,123,157,.15); color: var(--gba); border: 1px solid rgba(69,123,157,.4); }
+
+  .terr { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+  .flag {
+    font-size: 0.6rem;
+    padding: 0.12rem 0.35rem;
+    background: #1e1e1e;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    white-space: nowrap;
+  }
+  .flag.excl { border-color: var(--excl); color: var(--excl); background: rgba(244,162,97,.08); }
+
+  .excl-star { color: var(--excl); font-size: 0.75rem; margin-left: 0.3rem; vertical-align: middle; }
+  .game-title { font-weight: 700; font-size: 0.7rem; }
+  .game-sub   { font-size: 0.58rem; color: var(--muted); margin-top: 0.12rem; }
+  .genre-tag  { font-size: 0.6rem; color: var(--muted); font-style: italic; }
+
+  /* ── OWNERSHIP CELLS ── */
+  td.col-condition,
+  td.col-region-owned { min-width: 120px; }
+
+  select.own-select {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.62rem;
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 0.3rem 0.45rem;
+    outline: none;
+    cursor: pointer;
+    width: 100%;
+    transition: border-color .2s, color .2s;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23666'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.5rem center;
+    padding-right: 1.5rem;
+  }
+  select.own-select:focus { border-color: var(--owned); }
+
+  /* Condition colour states */
+  select.cond-loose   { border-color: var(--loose);   color: var(--loose);   background-color: rgba(233,196,106,.07); }
+  select.cond-complet { border-color: #5bc0be;         color: #5bc0be;        background-color: rgba(91,192,190,.07); }
+  select.cond-cib     { border-color: var(--cib);      color: var(--cib);     background-color: rgba(231,111,81,.07); }
+
+  /* Region owned colour */
+  select.reg-jp { border-color: #ff6b6b; color: #ff6b6b; background-color: rgba(255,107,107,.07); }
+  select.reg-us { border-color: #74b9ff; color: #74b9ff; background-color: rgba(116,185,255,.07); }
+  select.reg-eu { border-color: #a29bfe; color: #a29bfe; background-color: rgba(162,155,254,.07); }
+  select.reg-au { border-color: #fd79a8; color: #fd79a8; background-color: rgba(253,121,168,.07); }
+
+  /* owned checkmark in title col */
+  .owned-dot {
+    display: inline-block;
+    width: 7px; height: 7px;
+    background: var(--owned);
+    border-radius: 50%;
+    margin-right: 6px;
+    vertical-align: middle;
+    flex-shrink: 0;
+  }
+
+  .no-results {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: var(--muted);
+    font-family: 'Press Start 2P', monospace;
+    font-size: 0.65rem;
+    line-height: 2;
+  }
+
+  /* ── LEGEND ── */
+  .legend {
+    padding: 0.9rem 2rem;
+    font-size: 0.6rem;
+    color: var(--muted);
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem 2rem;
+    align-items: center;
+  }
+  .legend span { display: flex; align-items: center; gap: 0.4rem; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
+  /* Save toast */
+  #toast {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    background: var(--owned);
+    color: #000;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 0.45rem;
+    padding: 0.6rem 1rem;
+    opacity: 0;
+    transition: opacity .3s;
+    pointer-events: none;
+    z-index: 1000;
+    letter-spacing: 0.06em;
+  }
+  #toast.show { opacity: 1; }
+
+  @media (max-width: 600px) {
+    .controls { padding: 1rem; }
+    .table-wrap { padding: 1rem 0.5rem 3rem; }
+    header { padding: 2rem 1rem 1.5rem; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>NINTENDO FIRST-PARTY<br>GAME BOY TRACKER</h1>
+  <p>GB · GBC · GBA — Suivi de collection</p>
+</header>
+
+<div class="controls">
+  <input class="search-box" type="text" id="search" placeholder="Rechercher un jeu…">
+  <div class="btn-group">
+    <button id="btn-all"   class="active-all"  onclick="filter('all')">TOUT</button>
+    <button id="btn-gb"    onclick="filter('GB')">🟢 GB</button>
+    <button id="btn-gbc"   onclick="filter('GBC')">🔴 GBC</button>
+    <button id="btn-gba"   onclick="filter('GBA')">🔵 GBA</button>
+    <button id="btn-excl"  onclick="filter('excl')">⚠ EXCLU</button>
+    <button id="btn-owned" onclick="filter('owned')">✓ POSSÉDÉS</button>
+    <button id="btn-miss"  onclick="filter('missing')">✗ MANQUANTS</button>
+  </div>
+</div>
+
+<div class="stats" id="stats"></div>
+
+<div class="table-wrap">
+  <table id="gamesTable">
+    <thead>
+      <tr>
+        <th onclick="sortBy('title')"   id="th-title">TITRE <span class="arrow" id="arr-title">↕</span></th>
+        <th onclick="sortBy('console')" id="th-console">CONSOLE <span class="arrow" id="arr-console">↕</span></th>
+        <th onclick="sortBy('year')"    id="th-year">ANNÉE <span class="arrow" id="arr-year">↕</span></th>
+        <th class="no-sort">GENRE</th>
+        <th class="no-sort">DISPO</th>
+        <th class="no-sort">ÉTAT</th>
+        <th class="no-sort">RÉGION POSSÉDÉE</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+  <div class="no-results" id="noResults" style="display:none">// AUCUN RÉSULTAT //</div>
+</div>
+
+<div class="legend">
+  <span><span class="dot" style="background:var(--loose)"></span> Loose (cartouche seule)</span>
+  <span><span class="dot" style="background:#5bc0be"></span> Jeu + Manuel</span>
+  <span><span class="dot" style="background:var(--cib)"></span> CIB (boîte complète)</span>
+  <span><span class="dot" style="background:var(--owned)"></span> Possédé</span>
+  <span><span class="flag excl">★</span> Exclusivité régionale</span>
+</div>
+
+<div id="toast">SAUVEGARDÉ ✓</div>
+
+<script>
+// ── GAME DATA ─────────────────────────────────────────────────────────────────
+const GAMES = [
+  // ── GAME BOY ──────────────────────────────────────────────────
+  { id:"gb_alleyway",          title:"Alleyway",                              sub:"",                               console:"GB",  year:1989, genre:"Casse-briques",    terr:["🌐"], excl:false },
+  { id:"gb_baseball",          title:"Baseball",                              sub:"",                               console:"GB",  year:1989, genre:"Sport",             terr:["🌐"], excl:false },
+  { id:"gb_golf",              title:"Golf",                                  sub:"",                               console:"GB",  year:1989, genre:"Sport",             terr:["🌐"], excl:false },
+  { id:"gb_sml1",              title:"Super Mario Land",                      sub:"",                               console:"GB",  year:1989, genre:"Plateforme",        terr:["🌐"], excl:false },
+  { id:"gb_tennis",            title:"Tennis",                                sub:"",                               console:"GB",  year:1989, genre:"Sport",             terr:["🌐"], excl:false },
+  { id:"gb_tetris",            title:"Tetris",                                sub:"(Nintendo publish)",             console:"GB",  year:1989, genre:"Puzzle",            terr:["🌐"], excl:false },
+  { id:"gb_drmario",           title:"Dr. Mario",                             sub:"",                               console:"GB",  year:1990, genre:"Puzzle",            terr:["🌐"], excl:false },
+  { id:"gb_f1race",            title:"F-1 Race",                              sub:"",                               console:"GB",  year:1990, genre:"Course",            terr:["🌐"], excl:false },
+  { id:"gb_motocross",         title:"Motocross Maniacs",                     sub:"(Nintendo pub JP)",              console:"GB",  year:1990, genre:"Course",            terr:["🇯🇵"], excl:true },
+  { id:"gb_sml2",              title:"Super Mario Land 2: 6 Golden Coins",    sub:"",                               console:"GB",  year:1992, genre:"Plateforme",        terr:["🌐"], excl:false },
+  { id:"gb_kirby1",            title:"Kirby's Dream Land",                    sub:"",                               console:"GB",  year:1992, genre:"Plateforme",        terr:["🌐"], excl:false },
+  { id:"gb_kidicarus",         title:"Kid Icarus: Of Myths and Monsters",     sub:"",                               console:"GB",  year:1991, genre:"Action",            terr:["🇺🇸","🌍"], excl:true },
+  { id:"gb_metroid2",          title:"Metroid II: Return of Samus",           sub:"",                               console:"GB",  year:1991, genre:"Action-Aventure",   terr:["🌐"], excl:false },
+  { id:"gb_zelda_la",          title:"The Legend of Zelda: Link's Awakening", sub:"",                               console:"GB",  year:1993, genre:"Action-RPG",        terr:["🌐"], excl:false },
+  { id:"gb_wario1",            title:"Wario Land: Super Mario Land 3",        sub:"",                               console:"GB",  year:1994, genre:"Plateforme",        terr:["🌐"], excl:false },
+  { id:"gb_kirbypin",          title:"Kirby's Pinball Land",                  sub:"",                               console:"GB",  year:1993, genre:"Flipper",           terr:["🌐"], excl:false },
+  { id:"gb_kirby2",            title:"Kirby's Dream Land 2",                  sub:"",                               console:"GB",  year:1995, genre:"Plateforme",        terr:["🌐"], excl:false },
+  { id:"gb_kirbybball",        title:"Kirby's Block Ball",                    sub:"",                               console:"GB",  year:1995, genre:"Casse-briques",     terr:["🌐"], excl:false },
+  { id:"gb_pkmnrouge",         title:"Pokémon Rouge",                         sub:"Gén. I — (édité Nintendo)",      console:"GB",  year:1996, genre:"RPG",               terr:["🌐"], excl:false },
+  { id:"gb_pkmnbleu",          title:"Pokémon Bleu",                          sub:"Gén. I — (édité Nintendo)",      console:"GB",  year:1996, genre:"RPG",               terr:["🌐"], excl:false },
+  { id:"gb_pkmnvert",          title:"Pokémon Vert",                          sub:"Gén. I — version JP originale",  console:"GB",  year:1996, genre:"RPG",               terr:["🇯🇵"], excl:true },
+  { id:"gb_pkmnjaune",         title:"Pokémon Jaune",                         sub:"Gén. I",                         console:"GB",  year:1998, genre:"RPG",               terr:["🌐"], excl:false },
+  { id:"gb_kirbystk",          title:"Kirby's Star Stacker",                  sub:"",                               console:"GB",  year:1997, genre:"Puzzle",            terr:["🌐"], excl:false },
+  { id:"gb_gwgallery",         title:"Game Boy Gallery",                      sub:"(Game & Watch Gallery EU)",      console:"GB",  year:1995, genre:"Compilation",       terr:["🌍"], excl:true },
+  { id:"gb_gwgallery2",        title:"Game & Watch Gallery 2",                sub:"",                               console:"GB",  year:1997, genre:"Compilation",       terr:["🌐"], excl:false },
+  { id:"gb_gwgallery3",        title:"Game & Watch Gallery 3",                sub:"",                               console:"GB",  year:1999, genre:"Compilation",       terr:["🌐"], excl:false },
+  { id:"gb_donkeykong",        title:"Donkey Kong",                           sub:"",                               console:"GB",  year:1994, genre:"Plateforme/Puzzle", terr:["🌐"], excl:false },
+  { id:"gb_yoshi",             title:"Yoshi",                                 sub:"",                               console:"GB",  year:1991, genre:"Puzzle",            terr:["🌐"], excl:false },
+  { id:"gb_yoshicookie",       title:"Yoshi's Cookie",                        sub:"",                               console:"GB",  year:1993, genre:"Puzzle",            terr:["🌐"], excl:false },
+  { id:"gb_balloonkid",        title:"Balloon Kid",                           sub:"",                               console:"GB",  year:1990, genre:"Plateforme",        terr:["🇺🇸","🌍"], excl:true },
+  { id:"gb_balloonfightgb",    title:"Balloon Fight GB",                      sub:"(version JP de Balloon Kid)",    console:"GB",  year:1999, genre:"Plateforme",        terr:["🇯🇵"], excl:true },
+  { id:"gb_radar",             title:"Radar Mission",                         sub:"",                               console:"GB",  year:1990, genre:"Stratégie",         terr:["🌐"], excl:false },
+  { id:"gb_amazingtater",      title:"Amazing Tater",                         sub:"(Nintendo pub NA)",              console:"GB",  year:1991, genre:"Puzzle",            terr:["🇺🇸"], excl:true },
+  { id:"gb_battlebull",        title:"Battle Bull",                           sub:"(Nintendo pub JP)",              console:"GB",  year:1990, genre:"Action",            terr:["🇯🇵"], excl:true },
+  { id:"gb_catrap",            title:"Catrap",                                sub:"(Nintendo pub NA)",              console:"GB",  year:1990, genre:"Puzzle",            terr:["🇺🇸"], excl:true },
+  { id:"gb_bionic",            title:"Bionic Commando",                       sub:"(Nintendo pub NA)",              console:"GB",  year:1992, genre:"Action",            terr:["🇺🇸"], excl:true },
+
+  // ── GAME BOY COLOR ────────────────────────────────────────────
+  { id:"gbc_zelda_ladx",       title:"The Legend of Zelda: Link's Awakening DX", sub:"",                           console:"GBC", year:1998, genre:"Action-RPG",        terr:["🌐"], excl:false },
+  { id:"gbc_pkmnor",           title:"Pokémon Or",                            sub:"Gén. II — (édité Nintendo)",     console:"GBC", year:1999, genre:"RPG",               terr:["🌐"], excl:false },
+  { id:"gbc_pkmnargent",       title:"Pokémon Argent",                        sub:"Gén. II — (édité Nintendo)",     console:"GBC", year:1999, genre:"RPG",               terr:["🌐"], excl:false },
+  { id:"gbc_pkmncristal",      title:"Pokémon Cristal",                       sub:"Gén. II",                        console:"GBC", year:2000, genre:"RPG",               terr:["🌐"], excl:false },
+  { id:"gbc_zelda_ages",       title:"The Legend of Zelda: Oracle of Ages",   sub:"",                               console:"GBC", year:2001, genre:"Action-RPG",        terr:["🌐"], excl:false },
+  { id:"gbc_zelda_seasons",    title:"The Legend of Zelda: Oracle of Seasons",sub:"",                               console:"GBC", year:2001, genre:"Action-RPG",        terr:["🌐"], excl:false },
+  { id:"gbc_wario2",           title:"Wario Land II",                         sub:"",                               console:"GBC", year:1998, genre:"Plateforme",        terr:["🌐"], excl:false },
+  { id:"gbc_wario3",           title:"Wario Land 3",                          sub:"",                               console:"GBC", year:2000, genre:"Plateforme",        terr:["🌐"], excl:false },
+  { id:"gbc_gwgallery4",       title:"Game & Watch Gallery 4",                sub:"",                               console:"GBC", year:2002, genre:"Compilation",       terr:["🌐"], excl:false },
+  { id:"gbc_kirbytilt",        title:"Kirby Tilt 'n' Tumble",                 sub:"",                               console:"GBC", year:2000, genre:"Action",            terr:["🇯🇵","🇺🇸"], excl:true },
+  { id:"gbc_kirbydl3",         title:"Kirby's Dream Land 3",                  sub:"(GBC enhanced port)",            console:"GBC", year:2000, genre:"Plateforme",        terr:["🇯🇵"], excl:true },
+  { id:"gbc_smb_deluxe",       title:"Super Mario Bros. Deluxe",              sub:"",                               console:"GBC", year:1999, genre:"Plateforme",        terr:["🌐"], excl:false },
+  { id:"gbc_pkmnpin",          title:"Pokémon Pinball",                       sub:"Gén. I",                         console:"GBC", year:1999, genre:"Flipper",           terr:["🌐"], excl:false },
+  { id:"gbc_mariogolf",        title:"Mario Golf",                            sub:"",                               console:"GBC", year:1999, genre:"Sport",             terr:["🌐"], excl:false },
+  { id:"gbc_mariotennis",      title:"Mario Tennis",                          sub:"",                               console:"GBC", year:2000, genre:"Sport",             terr:["🌐"], excl:false },
+  { id:"gbc_tetris_dx",        title:"Tetris DX",                             sub:"",                               console:"GBC", year:1998, genre:"Puzzle",            terr:["🌐"], excl:false },
+  { id:"gbc_camera",           title:"Game Boy Color Camera",                 sub:"",                               console:"GBC", year:1998, genre:"Utilitaire",        terr:["🌐"], excl:false },
+  { id:"gbc_harvest",          title:"Harvest Moon GBC",                      sub:"(Nintendo pub JP)",              console:"GBC", year:1999, genre:"Simulation",        terr:["🇯🇵"], excl:true },
+  { id:"gbc_dragonw",          title:"Dragon Warrior Monsters",               sub:"(Nintendo pub JP)",              console:"GBC", year:1998, genre:"RPG",               terr:["🇯🇵"], excl:true },
+  { id:"gbc_pkmncard1",        title:"Pokémon Trading Card Game",             sub:"Gén. I/II — JP & US uniquement", console:"GBC", year:1998, genre:"Cartes/RPG",        terr:["🇯🇵","🇺🇸"], excl:true },
+  { id:"gbc_pkmncard2",        title:"Pokémon Trading Card Game 2",           sub:"Gén. I/II — JP uniquement",      console:"GBC", year:2001, genre:"Cartes/RPG",        terr:["🇯🇵"], excl:true },
+  { id:"gbc_dkc",              title:"Donkey Kong Country",                   sub:"(GBC port)",                     console:"GBC", year:2000, genre:"Plateforme",        terr:["🌐"], excl:false },
+
+  // ── GAME BOY ADVANCE ──────────────────────────────────────────
+  { id:"gba_fzero",            title:"F-Zero: Maximum Velocity",              sub:"",                               console:"GBA", year:2001, genre:"Course",            terr:["🌐"], excl:false },
+  { id:"gba_sma2",             title:"Super Mario World: Super Mario Advance 2",sub:"",                            console:"GBA", year:2001, genre:"Plateforme",        terr:["🌐"], excl:false },
+  { id:"gba_sma3",             title:"Yoshi's Island: Super Mario Advance 3", sub:"",                              console:"GBA", year:2002, genre:"Plateforme",        terr:["🌐"], excl:false },
+  { id:"gba_sma4",             title:"Super Mario Bros. 3: Super Mario Advance 4",sub:"",                          console:"GBA", year:2003, genre:"Plateforme",        terr:["🌐"], excl:false },
+  { id:"gba_sma1",             title:"Super Mario Advance",                   sub:"",                               console:"GBA", year:2001, genre:"Plateforme",        terr:["🌐"], excl:false },
+  { id:"gba_zelda_lttp",       title:"The Legend of Zelda: A Link to the Past / Four Swords",sub:"",               console:"GBA", year:2002, genre:"Action-RPG",        terr:["🌐"], excl:false },
+  { id:"gba_zelda_mc",         title:"The Legend of Zelda: The Minish Cap",   sub:"",                               console:"GBA", year:2004, genre:"Action-RPG",        terr:["🌐"], excl:false },
+  { id:"gba_metroid_fusion",   title:"Metroid Fusion",                        sub:"",                               console:"GBA", year:2002, genre:"Action-Aventure",   terr:["🌐"], excl:false },
+  { id:"gba_metroid_zm",       title:"Metroid: Zero Mission",                 sub:"",                               console:"GBA", year:2004, genre:"Action-Aventure",   terr:["🌐"], excl:false },
+  { id:"gba_kirby_ndl",        title:"Kirby: Nightmare in Dream Land",        sub:"",                               console:"GBA", year:2002, genre:"Plateforme",        terr:["🌐"], excl:false },
+  { id:"gba_kirby_am",         title:"Kirby & The Amazing Mirror",            sub:"",                               console:"GBA", year:2004, genre:"Plateforme",        terr:["🌐"], excl:false },
+  { id:"gba_wario4",           title:"Wario Land 4",                          sub:"",                               console:"GBA", year:2001, genre:"Plateforme",        terr:["🌐"], excl:false },
+  { id:"gba_warioware1",       title:"WarioWare, Inc.: Mega Microgame$",      sub:"",                               console:"GBA", year:2003, genre:"Party/Minijeux",    terr:["🌐"], excl:false },
+  { id:"gba_warioware_tw",     title:"WarioWare: Twisted!",                   sub:"",                               console:"GBA", year:2004, genre:"Party/Minijeux",    terr:["🇯🇵","🇺🇸"], excl:true },
+  { id:"gba_mkart",            title:"Mario Kart: Super Circuit",             sub:"",                               console:"GBA", year:2001, genre:"Course",            terr:["🌐"], excl:false },
+  { id:"gba_mgolf",            title:"Mario Golf: Advance Tour",              sub:"",                               console:"GBA", year:2004, genre:"Sport",             terr:["🌐"], excl:false },
+  { id:"gba_mtennis",          title:"Mario Tennis: Power Tour",              sub:"",                               console:"GBA", year:2005, genre:"Sport",             terr:["🌐"], excl:false },
+  { id:"gba_mvsdk",            title:"Mario vs. Donkey Kong",                 sub:"",                               console:"GBA", year:2004, genre:"Puzzle/Plateforme", terr:["🌐"], excl:false },
+  { id:"gba_mparty",           title:"Mario Party Advance",                   sub:"",                               console:"GBA", year:2004, genre:"Party",             terr:["🌐"], excl:false },
+  { id:"gba_dkc1",             title:"Donkey Kong Country",                   sub:"(GBA port)",                     console:"GBA", year:2003, genre:"Plateforme",        terr:["🌐"], excl:false },
+  { id:"gba_dkc2",             title:"Donkey Kong Country 2",                 sub:"(GBA port)",                     console:"GBA", year:2004, genre:"Plateforme",        terr:["🌐"], excl:false },
+  { id:"gba_dkc3",             title:"Donkey Kong Country 3",                 sub:"(GBA port)",                     console:"GBA", year:2005, genre:"Plateforme",        terr:["🌐"], excl:false },
+  { id:"gba_fe7",              title:"Fire Emblem",                           sub:"(1re sortie hors JP)",           console:"GBA", year:2003, genre:"RPG Tactique",      terr:["🌐"], excl:false },
+  { id:"gba_fe6",              title:"Fire Emblem: The Binding Blade",        sub:"",                               console:"GBA", year:2002, genre:"RPG Tactique",      terr:["🇯🇵"], excl:true },
+  { id:"gba_fe8",              title:"Fire Emblem: The Sacred Stones",        sub:"",                               console:"GBA", year:2004, genre:"RPG Tactique",      terr:["🌐"], excl:false },
+  { id:"gba_goldensun1",       title:"Golden Sun",                            sub:"",                               console:"GBA", year:2001, genre:"RPG",               terr:["🌐"], excl:false },
+  { id:"gba_goldensun2",       title:"Golden Sun: The Lost Age",              sub:"",                               console:"GBA", year:2002, genre:"RPG",               terr:["🌐"], excl:false },
+  { id:"gba_pkmnruby",         title:"Pokémon Rubis",                         sub:"Gén. III — (édité Nintendo)",    console:"GBA", year:2002, genre:"RPG",               terr:["🌐"], excl:false },
+  { id:"gba_pkmnsapphire",     title:"Pokémon Saphir",                        sub:"Gén. III — (édité Nintendo)",    console:"GBA", year:2002, genre:"RPG",               terr:["🌐"], excl:false },
+  { id:"gba_pkmnemerald",      title:"Pokémon Émeraude",                      sub:"Gén. III",                       console:"GBA", year:2004, genre:"RPG",               terr:["🌐"], excl:false },
+  { id:"gba_pkmnfr",           title:"Pokémon Rouge Feu",                     sub:"Gén. I remake",                  console:"GBA", year:2004, genre:"RPG",               terr:["🌐"], excl:false },
+  { id:"gba_pkmnlg",           title:"Pokémon Vert Feuille",                  sub:"Gén. I remake",                  console:"GBA", year:2004, genre:"RPG",               terr:["🌐"], excl:false },
+  { id:"gba_pkmnpinball2",     title:"Pokémon Pinball: Rubis & Saphir",       sub:"Gén. III",                       console:"GBA", year:2003, genre:"Flipper",           terr:["🌐"], excl:false },
+  { id:"gba_pkmnmd_red",       title:"Pokémon Mystery Dungeon: Équipe de Secours Rouge", sub:"Gén. I-III",          console:"GBA", year:2005, genre:"Dungeon RPG",       terr:["🌐"], excl:false },
+  { id:"gba_gwgallery4",       title:"Game & Watch Gallery 4",                sub:"(GBA edition)",                  console:"GBA", year:2002, genre:"Compilation",       terr:["🌐"], excl:false },
+  { id:"gba_nes_dk",           title:"Classic NES Series: Donkey Kong",       sub:"",                               console:"GBA", year:2004, genre:"Plateforme",        terr:["🌐"], excl:false },
+  { id:"gba_nes_drmario",      title:"Classic NES Series: Dr. Mario",         sub:"",                               console:"GBA", year:2004, genre:"Puzzle",            terr:["🌐"], excl:false },
+  { id:"gba_nes_excite",       title:"Classic NES Series: Excitebike",        sub:"",                               console:"GBA", year:2004, genre:"Course",            terr:["🌐"], excl:false },
+  { id:"gba_nes_iceclimber",   title:"Classic NES Series: Ice Climber",       sub:"",                               console:"GBA", year:2004, genre:"Plateforme",        terr:["🌐"], excl:false },
+  { id:"gba_nes_metroid",      title:"Classic NES Series: Metroid",           sub:"",                               console:"GBA", year:2004, genre:"Action-Aventure",   terr:["🌐"], excl:false },
+  { id:"gba_nes_pacman",       title:"Classic NES Series: Pac-Man",           sub:"(Nintendo pub)",                 console:"GBA", year:2004, genre:"Arcade",            terr:["🌐"], excl:false },
+  { id:"gba_nes_smb",          title:"Classic NES Series: Super Mario Bros.", sub:"",                               console:"GBA", year:2004, genre:"Plateforme",        terr:["🌐"], excl:false },
+  { id:"gba_nes_zelda1",       title:"Classic NES Series: The Legend of Zelda",sub:"",                             console:"GBA", year:2004, genre:"Action-RPG",        terr:["🌐"], excl:false },
+  { id:"gba_nes_zelda2",       title:"Classic NES Series: Zelda II",          sub:"",                               console:"GBA", year:2004, genre:"Action-RPG",        terr:["🌐"], excl:false },
+  { id:"gba_nes_bomberman",    title:"Classic NES Series: Bomberman",         sub:"(Nintendo pub JP)",              console:"GBA", year:2004, genre:"Arcade",            terr:["🇯🇵"], excl:true },
+  { id:"gba_nes_castlevania",  title:"Classic NES Series: Castlevania",       sub:"(Nintendo pub JP)",              console:"GBA", year:2004, genre:"Action",            terr:["🇯🇵"], excl:true },
+  { id:"gba_nes_xevious",      title:"Classic NES Series: Xevious",           sub:"(Nintendo pub JP)",              console:"GBA", year:2004, genre:"Shoot'em up",       terr:["🇯🇵"], excl:true },
+  { id:"gba_advancewars1",     title:"Advance Wars",                          sub:"",                               console:"GBA", year:2001, genre:"Stratégie",         terr:["🇯🇵","🇺🇸"], excl:true },
+  { id:"gba_advancewars2",     title:"Advance Wars 2: Black Hole Rising",     sub:"",                               console:"GBA", year:2003, genre:"Stratégie",         terr:["🌐"], excl:false },
+  // ── FAMICOM MINI — titres JP uniquement (absents de la Classic NES Series occidentale) ──
+  { id:"gba_fami_mappy",       title:"Famicom Mini: Mappy",                   sub:"Vol. 8 — JP uniquement",         console:"GBA", year:2004, genre:"Arcade",            terr:["🇯🇵"], excl:true },
+  { id:"gba_fami_starsoldier", title:"Famicom Mini: Star Soldier",            sub:"Vol. 10 — JP uniquement",        console:"GBA", year:2004, genre:"Shoot'em up",       terr:["🇯🇵"], excl:true },
+  { id:"gba_fami_mariobros",   title:"Famicom Mini: Mario Bros.",             sub:"Vol. 11 — JP uniquement",        console:"GBA", year:2004, genre:"Arcade",            terr:["🇯🇵"], excl:true },
+  { id:"gba_fami_cluclu",      title:"Famicom Mini: Clu Clu Land",           sub:"Vol. 12 — JP uniquement",        console:"GBA", year:2004, genre:"Arcade",            terr:["🇯🇵"], excl:true },
+  { id:"gba_fami_balloonfight",title:"Famicom Mini: Balloon Fight",           sub:"Vol. 13 — JP uniquement",        console:"GBA", year:2004, genre:"Action",            terr:["🇯🇵"], excl:true },
+  { id:"gba_fami_wreckingcrew",title:"Famicom Mini: Wrecking Crew",          sub:"Vol. 14 — JP uniquement",        console:"GBA", year:2004, genre:"Action/Puzzle",     terr:["🇯🇵"], excl:true },
+  { id:"gba_fami_digdug",      title:"Famicom Mini: Dig Dug",                sub:"Vol. 16 — JP uniquement",        console:"GBA", year:2004, genre:"Arcade",            terr:["🇯🇵"], excl:true },
+  { id:"gba_fami_advisle",     title:"Famicom Mini: Takahashi Meijin no Bōken Jima", sub:"Vol. 17 (Adventure Island) — JP uniquement", console:"GBA", year:2004, genre:"Plateforme", terr:["🇯🇵"], excl:true },
+  { id:"gba_fami_makaimura",   title:"Famicom Mini: Makaimura",              sub:"Vol. 18 (Ghosts'n Goblins) — JP uniquement", console:"GBA", year:2004, genre:"Action", terr:["🇯🇵"], excl:true },
+  { id:"gba_fami_twinbee",     title:"Famicom Mini: TwinBee",                sub:"Vol. 19 — JP uniquement",        console:"GBA", year:2004, genre:"Shoot'em up",       terr:["🇯🇵"], excl:true },
+  { id:"gba_fami_goemon",      title:"Famicom Mini: Ganbare Goemon!",        sub:"Vol. 20 — JP uniquement",        console:"GBA", year:2004, genre:"Action-Aventure",   terr:["🇯🇵"], excl:true },
+  { id:"gba_fami_smb2",        title:"Famicom Mini: Super Mario Bros. 2",    sub:"Vol. 21 (The Lost Levels) — JP uniquement", console:"GBA", year:2004, genre:"Plateforme", terr:["🇯🇵"], excl:true },
+  { id:"gba_fami_nazo",        title:"Famicom Mini: Nazo no Murasamejō",     sub:"Vol. 22 — JP uniquement",        console:"GBA", year:2004, genre:"Action-Aventure",   terr:["🇯🇵"], excl:true },
+  { id:"gba_fami_shinonigashima",title:"Famicom Mini: Shin Onigashima",      sub:"Vol. 26 (Disk System) — JP uniquement", console:"GBA", year:2004, genre:"Aventure textuelle", terr:["🇯🇵"], excl:true },
+  { id:"gba_fami_tantei1",     title:"Famicom Mini: Famicom Tantei Club",    sub:"Vol. 27 (Disk System) — JP uniquement", console:"GBA", year:2004, genre:"Aventure/Mystère", terr:["🇯🇵"], excl:true },
+  { id:"gba_fami_tantei2",     title:"Famicom Mini: Famicom Tantei Club Part II", sub:"Vol. 28 (Disk System) — JP uniquement", console:"GBA", year:2004, genre:"Aventure/Mystère", terr:["🇯🇵"], excl:true },
+  { id:"gba_fami_akumajo",     title:"Famicom Mini: Akumajō Dracula",        sub:"Vol. 29 (Disk System, Castlevania JP) — JP uniquement", console:"GBA", year:2004, genre:"Action", terr:["🇯🇵"], excl:true },
+  { id:"gba_fami_sdgundam",    title:"Famicom Mini: SD Gundam World: Scramble Wars", sub:"Vol. 30 — JP uniquement", console:"GBA", year:2004, genre:"Action",           terr:["🇯🇵"], excl:true },
+
+  { id:"gba_ereader",          title:"e-Reader",                              sub:"(Lecteur de cartes)",            console:"GBA", year:2001, genre:"Utilitaire",        terr:["🇯🇵","🇺🇸"], excl:true },
+  { id:"gba_doshin",           title:"Doshin the Giant",                      sub:"",                               console:"GBA", year:2002, genre:"Simulation",        terr:["🇯🇵"], excl:true },
+  { id:"gba_hamtaro",          title:"Hamtaro: Ham-Ham Heartbreak",           sub:"(Nintendo pub JP)",              console:"GBA", year:2002, genre:"Aventure",          terr:["🇯🇵"], excl:true },
+  { id:"gba_rhythm",           title:"Rhythm Tengoku",                        sub:"(Rhythm Heaven)",                console:"GBA", year:2006, genre:"Rythme",            terr:["🇯🇵"], excl:true },
+];
+
+// ── COLLECTION STATE (loaded from localStorage) ───────────────────────────────
+const STORAGE_KEY = 'nintendo_gb_collection';
+
+function loadCollection() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch(e) { return {}; }
+}
+
+function saveCollection() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(collection));
+    showToast();
+  } catch(e) {}
+}
+
+let collection = loadCollection();
+// collection[id] = { condition: 'loose'|'complet'|'cib'|'', region: 'jp'|'us'|'eu'|'au'|'' }
+
+function getOwnership(id) {
+  return collection[id] || { condition: '', region: '' };
+}
+
+function setField(id, field, value) {
+  if (!collection[id]) collection[id] = { condition: '', region: '' };
+  collection[id][field] = value;
+  // If condition cleared, also clear region
+  if (field === 'condition' && value === '') collection[id].region = '';
+  saveCollection();
+  // Re-render just this row
+  renderRow(id);
+  updateStats();
+}
+
+// ── UI STATE ──────────────────────────────────────────────────────────────────
+let currentFilter = 'all';
+let currentSort   = { key: 'year', dir: 1 };
+let currentSearch = '';
+
+function filter(f) {
+  currentFilter = f;
+  ['all','gb','gbc','gba','excl','owned','miss'].forEach(x => {
+    document.getElementById('btn-'+x)?.classList.remove(
+      'active-all','active-gb','active-gbc','active-gba','active-excl','active-owned','active-miss'
+    );
+  });
+  const map = { all:'active-all', GB:'active-gb', GBC:'active-gbc', GBA:'active-gba',
+                excl:'active-excl', owned:'active-owned', missing:'active-miss' };
+  const btnId = { all:'btn-all', GB:'btn-gb', GBC:'btn-gbc', GBA:'btn-gba',
+                  excl:'btn-excl', owned:'btn-owned', missing:'btn-miss' };
+  document.getElementById(btnId[f])?.classList.add(map[f]);
+  render();
+}
+
+function sortBy(key) {
+  if (currentSort.key === key) currentSort.dir *= -1;
+  else { currentSort.key = key; currentSort.dir = 1; }
+  render();
+}
+
+document.getElementById('search').addEventListener('input', e => {
+  currentSearch = e.target.value.toLowerCase();
+  render();
+});
+
+function isOwned(g) {
+  return !!(collection[g.id]?.condition);
+}
+
+function getFiltered() {
+  return GAMES.filter(g => {
+    const owned = isOwned(g);
+    const matchFilter =
+      currentFilter === 'all'     ? true :
+      currentFilter === 'excl'    ? g.excl :
+      currentFilter === 'owned'   ? owned :
+      currentFilter === 'missing' ? !owned :
+      g.console === currentFilter;
+    const matchSearch = !currentSearch ||
+      g.title.toLowerCase().includes(currentSearch) ||
+      g.genre.toLowerCase().includes(currentSearch) ||
+      g.console.toLowerCase().includes(currentSearch);
+    return matchFilter && matchSearch;
+  }).sort((a, b) => {
+    let va = a[currentSort.key], vb = b[currentSort.key];
+    if (typeof va === 'string') { va = va.toLowerCase(); vb = vb.toLowerCase(); }
+    return currentSort.dir * (va < vb ? -1 : va > vb ? 1 : 0);
+  });
+}
+
+const CC = { GB:'gb', GBC:'gbc', GBA:'gba' };
+
+const COND_LABEL = { '':'—', loose:'Loose', complet:'Jeu + Manuel', cib:'CIB' };
+const REG_LABEL  = { '':'—', jp:'🇯🇵 Japan', us:'🇺🇸 USA', eu:'🌍 Europe', au:'🇦🇺 Australie' };
+
+function rowHTML(g) {
+  const own  = getOwnership(g.id);
+  const owned = !!own.condition;
+  const exclMark = g.excl ? `<span class="excl-star" title="Exclusivité régionale">★</span>` : '';
+  const dot = owned ? `<span class="owned-dot" title="Possédé"></span>` : '';
+  const flags = g.terr.map(t => `<span class="flag">${t}</span>`).join('');
+
+  const condClass = own.condition ? `cond-${own.condition}` : '';
+  const regClass  = own.region   ? `reg-${own.region}`   : '';
+
+  const regionDisabled = !own.condition ? 'disabled' : '';
+
+  return `<tr id="row-${g.id}" class="${owned ? 'row-owned' : ''}">
+    <td>
+      <div class="game-title" style="display:flex;align-items:center">${dot}<span>${g.title}${exclMark}</span></div>
+      ${g.sub ? `<div class="game-sub">${g.sub}</div>` : ''}
+    </td>
+    <td><span class="badge badge-${CC[g.console]}">${g.console}</span></td>
+    <td>${g.year}</td>
+    <td><span class="genre-tag">${g.genre}</span></td>
+    <td><div class="terr">${flags}</div></td>
+    <td class="col-condition">
+      <select class="own-select ${condClass}" onchange="setField('${g.id}','condition',this.value)" data-id="${g.id}" data-field="condition">
+        <option value=""   ${!own.condition           ? 'selected':''}>—</option>
+        <option value="loose"   ${own.condition==='loose'   ? 'selected':''}>Loose</option>
+        <option value="complet" ${own.condition==='complet' ? 'selected':''}>Jeu + Manuel</option>
+        <option value="cib"     ${own.condition==='cib'     ? 'selected':''}>CIB</option>
+      </select>
+    </td>
+    <td class="col-region-owned">
+      <select class="own-select ${regClass}" onchange="setField('${g.id}','region',this.value)" data-id="${g.id}" data-field="region" ${regionDisabled}>
+        <option value="" ${!own.region         ? 'selected':''}>—</option>
+        <option value="jp" ${own.region==='jp' ? 'selected':''}>🇯🇵 Japan</option>
+        <option value="us" ${own.region==='us' ? 'selected':''}>🇺🇸 USA</option>
+        <option value="eu" ${own.region==='eu' ? 'selected':''}>🌍 Europe</option>
+        <option value="au" ${own.region==='au' ? 'selected':''}>🇦🇺 Australie</option>
+      </select>
+    </td>
+  </tr>`;
+}
+
+// Re-render a single row in place (avoids full re-render on every change)
+function renderRow(id) {
+  const row = document.getElementById('row-'+id);
+  if (!row) return;
+  const g = GAMES.find(x => x.id === id);
+  if (!g) return;
+  const tmp = document.createElement('tbody');
+  tmp.innerHTML = rowHTML(g);
+  const newRow = tmp.firstElementChild;
+  row.replaceWith(newRow);
+}
+
+function updateStats() {
+  const allOwned = GAMES.filter(g => isOwned(g));
+  const total    = GAMES.length;
+  const pct      = Math.round(allOwned.length / total * 100);
+
+  const byConsole = { GB:0, GBC:0, GBA:0 };
+  allOwned.forEach(g => byConsole[g.console]++);
+
+  const loose   = allOwned.filter(g => collection[g.id]?.condition === 'loose').length;
+  const complet = allOwned.filter(g => collection[g.id]?.condition === 'complet').length;
+  const cib     = allOwned.filter(g => collection[g.id]?.condition === 'cib').length;
+
+  const displayed = getFiltered().length;
+
+  document.getElementById('stats').innerHTML = `
+    <span>AFFICHÉ <b>${displayed}</b></span>
+    <span style="color:var(--gb)">GB <b>${byConsole.GB}/${GAMES.filter(g=>g.console==='GB').length}</b></span>
+    <span style="color:var(--gbc)">GBC <b>${byConsole.GBC}/${GAMES.filter(g=>g.console==='GBC').length}</b></span>
+    <span style="color:var(--gba)">GBA <b>${byConsole.GBA}/${GAMES.filter(g=>g.console==='GBA').length}</b></span>
+    <span style="color:var(--loose)">Loose <b>${loose}</b></span>
+    <span style="color:#5bc0be">+Manuel <b>${complet}</b></span>
+    <span style="color:var(--cib)">CIB <b>${cib}</b></span>
+    <div class="progress-wrap">
+      <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+      <span class="progress-label">${allOwned.length}/${total} (${pct}%)</span>
+    </div>
+  `;
+}
+
+function render() {
+  const data   = getFiltered();
+  const tbody  = document.getElementById('tbody');
+  const noRes  = document.getElementById('noResults');
+
+  // Sort arrows
+  ['title','console','year'].forEach(k => {
+    document.getElementById('th-'+k)?.classList.toggle('sorted', currentSort.key === k);
+    const arr = document.getElementById('arr-'+k);
+    if (arr) arr.textContent = currentSort.key === k ? (currentSort.dir === 1 ? '↓' : '↑') : '↕';
+  });
+
+  if (data.length === 0) {
+    tbody.innerHTML = '';
+    noRes.style.display = 'block';
+  } else {
+    noRes.style.display = 'none';
+    tbody.innerHTML = data.map(rowHTML).join('');
+  }
+
+  updateStats();
+}
+
+// Toast
+let toastTimer;
+function showToast() {
+  const t = document.getElementById('toast');
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 1400);
+}
+
+render();
+</script>
+</body>
+</html>
